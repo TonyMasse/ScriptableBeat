@@ -17,7 +17,7 @@ docker pull ubuntu:22.04
 cd ../dist
 
 # Build and ship the container
-docker build --file ../docker/Dockerfile -t tonymasse/scriptable_beat:v$SCRIPTABLE_BEAT_VERSION -t tonymasse/scriptable_beat:v$SCRIPTABLE_BEAT_VERSION.`date --utc +%Y%m%d_%H%M%S` -t tonymasse/scriptable_beat:latest ./ $@
+docker build --file ../docker/Dockerfile -t tonymasse/scriptable_beat:v$SCRIPTABLE_BASE_VERSION -t tonymasse/scriptable_beat:v$SCRIPTABLE_BEAT_VERSION -t tonymasse/scriptable_beat:latest ./ $@
 docker push --all-tags tonymasse/scriptable_beat
 
 # Get back home

@@ -28,7 +28,7 @@ RUN apt-get install -y curl
 # Install zip and unzip
 RUN apt-get install -y zip unzip
 
-WORKDIR /root
+WORKDIR /app/cmd/beats/scriptablebeat/
 
 COPY . .
 

@@ -2,3 +2,12 @@ language: python
 modules:
   - yaml
   - requests
+scripts:
+  # first_run: init.py
+  run: main.py
+  scheduled: scheduled.py
+scheduler:
+  run_mode: keep_running
+  frequency: 1h
+  restart_on_error: true
+  restart_on_crash: true

@@ -20,6 +20,7 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
 ## High level architecture
 
 ### Container containing
+
 - Beat core code
 - Interpreters for the selected supported scripts
 

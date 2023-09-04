@@ -28,6 +28,9 @@ RUN apt-get install -y curl
 # Install zip and unzip
 RUN apt-get install -y zip unzip
 
+# Add the Python modules
+RUN pip3 install --upgrade PyYAML
+
 WORKDIR /app/cmd/beats/scriptablebeat/
 
 COPY . .

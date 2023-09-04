@@ -32,5 +32,7 @@ WORKDIR /app/cmd/beats/scriptablebeat/
 
 COPY . .
 
-# Wait forever // TODO: Remove this
-CMD ["tail", "-f", "/dev/null"]
+# Set the entrypoints executable
+RUN chmod +x /app/cmd/beats/scriptablebeat/docker/_entrypoint.*.sh
+
+ENTRYPOINT ["/app/cmd/beats/scriptablebeat/docker/_entrypoint.run.sh"]

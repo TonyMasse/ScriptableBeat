@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Get the latest ubuntu image
-docker pull ubuntu:latest
+docker pull ubuntu:22.04
 
 # Build and ship the container
 docker build -t tonymasse/scriptable_beat:v0.1 -t tonymasse/scriptable_beat:latest ./ $@

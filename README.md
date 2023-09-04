@@ -1,7 +1,7 @@
 # Scriptable Beat
 ![Status](https://badgen.net/static/status/proof%20of%20concept/orange "Status")
-![Docker image size](https://badgen.net/docker/size/tonymasse/scriptable_beat?icon=docker "Docker image size")
-![Docker pulls](https://badgen.net/docker/pulls/tonymasse/scriptable_beat?icon=docker "Docker pulls")
+[![Docker image size](https://badgen.net/docker/size/tonymasse/scriptable_beat?icon=docker "Docker image size")](https://hub.docker.com/r/tonymasse/scriptable_beat)
+[![Docker pulls](https://badgen.net/docker/pulls/tonymasse/scriptable_beat?icon=docker "Docker pulls")](https://hub.docker.com/r/tonymasse/scriptable_beat)
 
 A Beat that allows the user to run any arbitrary script inside of it, to do the collection of the data, and then takes care of transmitting the output to the LogRhythm Open Collector, LogRhythm System Monitor Agent or LogStash over Lumberjack.
 

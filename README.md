@@ -5,7 +5,7 @@
 
 A Beat that allows the user to run any arbitrary script inside of it, to do the collection of the data, and then takes care of transmitting the output to the LogRhythm Open Collector, LogRhythm System Monitor Agent or LogStash over Lumberjack.
 
-# Key constrains and goals
+## Key constrains and goals
 
 - Run Python script
 - Run PowerShell script
@@ -17,13 +17,13 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
 - Ideally - Manage/clean the script output from the disk, preventing any unnecessary disk usage
 - Ideally - Deal with (Lumberjack) back-pressure by reducing/stopping scheduling frequency
 
-# High level architecture
+## High level architecture
 
-### Container containing:
+### Container containing
 - Beat core code
 - Interpreters for the selected supported scripts
 
-### Configuration:
+### Configuration
 
 - What packages/modules are required for the scripts
 - What langage/interpreter is to be used
@@ -60,7 +60,8 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
   - Leave as is
   - Delete
 
-### At startup:
+### At startup
+
 - Read from the configuration the list of required packages/modules required by the script
 - Download/update each of the said packages/modules
 - Start run sequence (only passing to next step on success of each step):
@@ -70,11 +71,13 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
   - Run Scheduler
 
 ### At run time
+
 Beat core to monitor:
+
 - STDOUT
 - STDERR
 - File/folder specified in configuration
 
-# Internal doc
-https://logrhythm.atlassian.net/l/cp/kmMun7qV
+## Internal doc
 
+https://logrhythm.atlassian.net/l/cp/kmMun7qV

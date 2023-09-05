@@ -1,7 +1,7 @@
 from locallib.pyLogBeat import PyLogBeatClient
 
 message = {'@timestamp': '2018-01-02T01:02:03',  '@version': '1', 'message': 'hello world'}
-client = PyLogBeatClient('logstash', 5045, ssl_enable=False)
+client = PyLogBeatClient('192.168.100.137', 5045, ssl_enable=False)
 client.connect()
 client.send([message])
 client.close()

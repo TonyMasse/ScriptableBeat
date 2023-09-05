@@ -1,6 +1,9 @@
 import os
 import yaml
 import logging
+import time
+import datetime
+import json
 from locallib.pyLogBeat import PyLogBeatClient
 
 __version__ = '0.1'
@@ -80,6 +83,7 @@ if __name__ == "__main__":
     script__run = config.get('scriptablebeat', {}).get('scripts', {}).get('run', '')
     script__scheduled = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled', '')
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
+    beatIdentifier = config.get('scriptablebeat', {}).get('beatIdentifier', '')
 
     logging.debug('Configuration:')
     logging.debug('script_language: %s', script_language)
@@ -94,7 +98,74 @@ if __name__ == "__main__":
         exit(1)
 
     # Send the Startup message
-    message = {'@timestamp': '2018-01-02T01:02:03',  '@version': '1', 'message': 'hello world'} # TODO: Replace with actual message
+
+    # Time in seconds since the epoch
+    now = datetime.datetime.now()
+    nanoseconds_since_epoch = int(time.mktime(now.timetuple())) * 1000000000
+    time_ISO8601 = now.isoformat()
+
+    # Get the hostname
+    hostname = os.uname()[1]
+
+    heartbeat_message = {
+        'service_name': 'scriptablebeat',
+        'service_version': __version__,
+        'time': {
+            'seconds': int(nanoseconds_since_epoch) # OC is expecting this in nanoseconds
+        },
+        'status': {
+            'code': 1,
+            'description': 'Service started'
+        }
+    }
+
+    message = {
+        '@timestamp': time_ISO8601,
+        'fullyqualifiedbeatname': "_".join(['scriptablebeat', beatIdentifier]),
+        '@version': '1',
+        'beat': {
+            'hostname': hostname,
+            'version': __version__,
+            'name': hostname
+        },
+        'host': {
+            'name': hostname
+        },
+        'heartbeat': json.dumps(heartbeat_message)
+    }
+
+    # Results in this in LogStash:
+    # {
+    #                 "@timestamp" => 2018-01-02T01:02:03.000Z,
+    #     "fullyqualifiedbeatname" => "scriptablebeat_478_Test_001",
+    #                   "@version" => "1",
+    #                       "beat" => {
+    #         "hostname" => "66f91015e36b",
+    #          "version" => "0.1",
+    #             "name" => "66f91015e36b"
+    #     },
+    #                       "host" => {
+    #         "name" => "66f91015e36b"
+    #     },
+    #                  "heartbeat" => "{\"service_name\": \"scriptablebeat\", \"service_version\": \"0.1\", \"time\": {\"seconds\": 1693950876000000000}, \"status\": {\"code\": 1, \"description\": \"Service started\"}}"
+    # }
+
+    # Model from WebhookBeat:
+    # {
+    #                 "@timestamp" => 2023-09-05T21:29:45.508Z,
+    #     "fullyqualifiedbeatname" => "webhookbeat_170_WC_Rob_N",
+    #                   "@version" => "1",
+    #                       "beat" => {
+    #         "hostname" => "e92561d0cd37",
+    #          "version" => "6.6.0",
+    #             "name" => "e92561d0cd37"
+    #     },
+    #                       "host" => {
+    #         "name" => "e92561d0cd37"
+    #     },
+    #                  "heartbeat" => "{\"service_name\":\"webhook\",\"service_version\":\"\",\"time\":{\"seconds\":1693949385508335700},\"status\":{\"code\":1,\"description\":\"Service started\"}}"
+    # }
+
     lumberjack_client.send([message])
 
     # Turn the light on our way out...

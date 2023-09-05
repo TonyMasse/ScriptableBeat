@@ -1,13 +1,37 @@
-language: python
-modules:
-  - yaml
-  - requests
-scripts:
-  # first_run: init.py
-  run: main.py
-  scheduled: scheduled.py
-scheduler:
-  run_mode: keep_running
-  frequency: 1h
-  restart_on_error: true
-  restart_on_crash: true
+scriptablebeat:
+  language: python
+  modules:
+    - yaml
+    - requests
+  scripts:
+    first_run: init.py
+    run: main.py
+    scheduled: scheduled.py
+  scheduler:
+    run_mode: keep_running
+    frequency: 1h
+    restart_on_error: true
+    restart_on_crash: true
+  heartbeatdisabled: false
+  heartbeatinterval: 60
+  beatIdentifier: 478_Test_001
+  logsource_name: Test 001
+
+logging.level: info
+logging.metrics.enabled: false
+logging.to_stderr: true
+output:
+  logstash:
+    backoff.init: 1
+    backoff.max: 60
+    bulk_max_size: 2048
+    compression_level: 3
+    hosts:
+    # - open_collector:5044
+    - 192.168.100.137:5045
+    loadbalance: false
+    pipelining: 2
+    slow_start: false
+    timeout: 30
+    ttl: 0
+

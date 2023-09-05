@@ -1,9 +1,11 @@
 import os
 import yaml
 import logging
+from locallib.pyLogBeat import PyLogBeatClient
 
 # Set the logging level and format
 logging.basicConfig(level=logging.INFO if os.environ.get('MODE') != 'DEV' else logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
+# logging.getLogger('pylogbeat').setLevel(logging.DEBUG)
 
 logging.info('--------------')
 logging.info('ScriptableBeat - Starting')

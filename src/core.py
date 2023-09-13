@@ -212,8 +212,8 @@ if __name__ == "__main__":
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
     beatIdentifier = config.get('scriptablebeat', {}).get('beatIdentifier', '')
 
-    logging.debug('Configuration:')
-    logging.debug('script_language: %s', script_language)
+    logging.debug('Configuration: %s', config)
+    # logging.debug('script_language: %s', script_language)
     # logging.debug('script__first_run: %s', script__first_run)
     # logging.debug('script__startup_run: %s', script__startup_run)
     # logging.debug('script__scheduled_run: %s', script__scheduled_run)
@@ -229,10 +229,10 @@ if __name__ == "__main__":
     heartbeat_thread.start()
 
     # Do stuff
-    logging.debug('Do stuff for 10 seconds...')
+    logging.debug('Do dummy stuff for 10 seconds...')
     time.sleep(10)
     initiate_shutdown()
-    logging.debug('Done doing stuff')
+    logging.debug('Done doing dummy stuff')
 
     # Bring the threads to the yard...
     logging.info('Waiting for threads to finish...')

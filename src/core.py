@@ -105,6 +105,8 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
         'heartbeat': json.dumps(heartbeat_message)
     }
 
+    logging.debug('Sending Heartbeat with status "%s" (%s) ...', status_description, status_code)
+
     lumberjack_client.send([message])
 
     # Results in this in LogStash:

@@ -4,17 +4,16 @@ import logging
 import time
 import datetime
 import json
+import threading
 from locallib.pyLogBeat import PyLogBeatClient
 
 __version__ = '0.1'
+beat_name = 'ScriptableBeat'
+are_we_running = True
 
 # Set the logging level and format
 logging.basicConfig(level=logging.INFO if os.environ.get('MODE') != 'DEV' else logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
 # logging.getLogger('pylogbeat').setLevel(logging.DEBUG)
-
-logging.info('--------------')
-logging.info('ScriptableBeat v%s - Starting - 🚀', __version__)
-logging.info('--------------')
 
 # Get the base directory of the script
 base_script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -70,6 +69,10 @@ def connect_to_lumberjack_server(config):
             return None
 
 def send_heartbeat(lumberjack_client, status_code, status_description):
+    if lumberjack_client is None:
+        logging.error('No connection to Lumberjack server is established. Heartbeat message cannot be sent.')
+        return None
+
     # Time in seconds since the epoch
     now = datetime.datetime.now()
     nanoseconds_since_epoch = int(time.mktime(now.timetuple())) * 1000000000
@@ -78,8 +81,11 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
     # Get the hostname
     hostname = os.uname()[1]
 
+    # Get the beat identifier from the configuration
+    beatIdentifier = config.get(beat_name.lower(), {}).get('beatIdentifier', '')
+
     heartbeat_message = {
-        'service_name': 'scriptablebeat',
+        'service_name': beat_name.lower(),
         'service_version': __version__,
         'time': {
             'seconds': int(nanoseconds_since_epoch) # OC is expecting this in nanoseconds
@@ -92,7 +98,7 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
 
     message = {
         '@timestamp': time_ISO8601,
-        'fullyqualifiedbeatname': "_".join(['scriptablebeat', beatIdentifier]),
+        'fullyqualifiedbeatname': "_".join([beat_name.lower(), beatIdentifier]),
         '@version': '1',
         'beat': {
             'hostname': hostname,
@@ -105,7 +111,7 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
         'heartbeat': json.dumps(heartbeat_message)
     }
 
-    logging.debug('Sending Heartbeat with status "%s" (%s) ...', status_description, status_code)
+    logging.debug('Sending Heartbeat with status "%s" (%s)... ❤️', status_description, status_code)
 
     lumberjack_client.send([message])
 
@@ -158,8 +164,40 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
     #                "heartbeat" => "{\"service_name\":\"webhook\",\"service_version\":\"\",\"time\":{\"seconds\":1694619863501683900},\"status\":{\"code\":2,\"description\":\"Service is Running\"}}"
     # }
 
+def heartbeat_background_job(lumberjack_client, status_code = 2, status_description = 'Service is Running'):
+    # Check if the heartbeat is disabled
+    heartbeatdisabled = config.get('scriptablebeat', {}).get('heartbeatdisabled', False)
+    if heartbeatdisabled:
+        logging.info('Heartbeat is disabled. 💔')
+        return None
+
+    # Send the Startup message
+    send_heartbeat(lumberjack_client, 1, 'Service started')
+
+    heartbeatinterval = config.get('scriptablebeat', {}).get('heartbeatinterval', 60)
+    logging.info('Heartbeat interval is %s seconds.', heartbeatinterval)
+
+    # Cycling through the heartbeat interval
+    # At one second intervals, so we can check for a shutdown request
+    second_counter = 0
+    while are_we_running:
+        second_counter += 1
+        time.sleep(1)
+        if second_counter >= heartbeatinterval:
+            second_counter = 0
+            send_heartbeat(lumberjack_client, status_code, status_description)
+    send_heartbeat(lumberjack_client, 3, 'Service is Stopped')
+
+def shutdown():
+    logging.info('Shutdown requested. 🛑')
+    global are_we_running
+    are_we_running = False
 
 if __name__ == "__main__":
+    logging.info('--------------')
+    logging.info('%s v%s - Starting - 🚀', beat_name, __version__)
+    logging.info('--------------')
+
     # Read the configuration
     config = read_config()
 
@@ -183,11 +221,25 @@ if __name__ == "__main__":
     # Connect to the Lumberjack Server
     lumberjack_client = connect_to_lumberjack_server(config)
     if lumberjack_client is None:
-        logging.error('No connection to Lumberjack serve could be established. Exiting.')
+        logging.error('No connection to Lumberjack server could be established. Exiting.')
         exit(1)
 
-    # Send the Startup message
-    send_heartbeat(lumberjack_client, 1, 'Service started')
+    # Set the heartbeat job in its own thread
+    heartbeat_thread = threading.Thread(target=heartbeat_background_job, args=(lumberjack_client, 2, 'Service is Running'))
+    heartbeat_thread.start()
+
+    # Do stuff
+    logging.debug('Do stuff...')
+    time.sleep(10)
+    shutdown()
+    logging.debug('Done doing stuff')
+
+    # Bring the threads to the yard...
+    heartbeat_thread.join()
 
     # Turn the light on our way out...
     lumberjack_client.close() # 😘
+
+    logging.info('--------------')
+    logging.info('%s v%s - Stopped - 🏁', beat_name, __version__)
+    logging.info('--------------')

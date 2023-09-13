@@ -225,6 +225,37 @@ def download_modules(config):
             logging.info('Installing Powertshell module: %s ...', module)
             os.system('Install-Module -Name ' + module)
 
+def run_script(script):
+    script_language = config.get('scriptablebeat', {}).get('language', 'bash')
+    if script_language == 'python':
+        os.system('python3 ' + script)
+
+    if script_language == 'bash':
+        os.system('bash ' + script)
+    
+    if script_language == 'powershell':
+        os.system('pwsh ' + script)
+
+def run_script_first_run(config):
+    # Run the first run script only once, at the very first startup
+    script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
+
+    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    first_script_file_name = 'script.first_run'
+    first_script_file_path = os.path.join(state_folder_path, first_script_file_name)
+
+    try:
+        if os.path.exists(first_script_file_path):
+            logging.info("Not running first run script as it has already been run.")
+        else:
+            logging.info('Storing first_run script into local file: "%s"...', first_script_file_path)
+            with open(first_script_file_path, "w") as file:
+                file.write(script__first_run)
+
+            logging.info("Running first_run script...")
+            run_script(first_script_file_path)
+    except Exception as e:
+        logging.error('Error running first run script: %s', str(e))
 
 if __name__ == "__main__":
     logging.info('--------------')
@@ -268,6 +299,9 @@ if __name__ == "__main__":
 
     # Get modules from config, then download and install them
     download_modules(config)
+
+    # Run the first run script only once, at the very first startup
+    run_script_first_run(config)
 
     # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')

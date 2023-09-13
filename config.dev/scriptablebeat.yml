@@ -3,15 +3,52 @@ scriptablebeat:
   modules:
     - yaml
     - requests
+    - time
   scripts:
-    first_run: init.py
-    run: main.py
-    scheduled: scheduled.py
+    first_run: |
+      import time
+
+      print("Do some stuff only on first run")
+    startup_run: |
+      import time
+
+      print("Do some startup stuff")
+    scheduled_run: |
+      import time
+
+      print("Hello, World!")
   scheduler:
     run_mode: keep_running
     frequency: 1h
-    restart_on_error: true
-    restart_on_crash: true
+    restart_script_on_error: true
+    restart_script_on_crash: true
+  data_stream:
+    format: text
+    # format: json
+    moniror_sources:
+    - stdout
+    # - stderr
+    # - files
+    stdout:
+      report_as_log_in_stream: true
+      report_as_error_in_stream: false
+      log_in_beats_log: false
+    stderr:
+      report_as_log_in_stream: false
+      report_as_error_in_stream: true
+      log_in_beats_log: true
+    files:
+      report_as_log_in_stream: true
+      report_as_error_in_stream: false
+      log_in_beats_log: false
+      paths:
+      - /var/log/scriptablebeat/scriptablebeat.log
+      - /var/log/scriptablebeat/scriptablebeat-*.log
+      # after_reading: leave_as_is
+      after_reading: delete
+      # after_reading: flush_to_empty
+      folder_left_empty: leave_as_is
+      # folder_left_empty: delete
   heartbeatdisabled: false
   heartbeatinterval: 60
   beatIdentifier: 478_Test_001

@@ -227,6 +227,9 @@ def download_modules(config):
 
 def run_script(script):
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
+
+    # TODO: capture output
+
     if script_language == 'python':
         logging.info('Running Python script from local file "%s"...', script)
         os.system('python3 ' + script)

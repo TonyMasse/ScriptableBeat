@@ -22,16 +22,16 @@ logging.metrics.enabled: false
 logging.to_stderr: true
 output:
   logstash:
-    backoff.init: 1
-    backoff.max: 60
-    bulk_max_size: 2048
-    compression_level: 3
+    # backoff.init: 1
+    # backoff.max: 60
+    # bulk_max_size: 2048
+    # compression_level: 3
     hosts:
     # - open_collector:5044
     - 192.168.100.137:5045
-    loadbalance: false
-    pipelining: 2
-    slow_start: false
+    # loadbalance: false
+    # pipelining: 2
+    # slow_start: false
     timeout: 30
-    ttl: 0
+    # ttl: 0
 

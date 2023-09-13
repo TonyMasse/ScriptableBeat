@@ -188,7 +188,7 @@ def heartbeat_background_job(lumberjack_client, status_code = 2, status_descript
             send_heartbeat(lumberjack_client, status_code, status_description)
     send_heartbeat(lumberjack_client, 3, 'Service is Stopped')
 
-def shutdown():
+def initiate_shutdown():
     logging.info('Shutdown requested. 🛑')
     global are_we_running
     are_we_running = False
@@ -207,16 +207,16 @@ if __name__ == "__main__":
 
     # Access specific configuration values
     script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
-    script__run = config.get('scriptablebeat', {}).get('scripts', {}).get('run', '')
-    script__scheduled = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled', '')
+    script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
+    script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
     beatIdentifier = config.get('scriptablebeat', {}).get('beatIdentifier', '')
 
     logging.debug('Configuration:')
     logging.debug('script_language: %s', script_language)
-    logging.debug('script__first_run: %s', script__first_run)
-    logging.debug('script__run: %s', script__run)
-    logging.debug('script__scheduled: %s', script__scheduled)
+    # logging.debug('script__first_run: %s', script__first_run)
+    # logging.debug('script__startup_run: %s', script__startup_run)
+    # logging.debug('script__scheduled_run: %s', script__scheduled_run)
 
     # Connect to the Lumberjack Server
     lumberjack_client = connect_to_lumberjack_server(config)
@@ -229,12 +229,13 @@ if __name__ == "__main__":
     heartbeat_thread.start()
 
     # Do stuff
-    logging.debug('Do stuff...')
+    logging.debug('Do stuff for 10 seconds...')
     time.sleep(10)
-    shutdown()
+    initiate_shutdown()
     logging.debug('Done doing stuff')
 
     # Bring the threads to the yard...
+    logging.info('Waiting for threads to finish...')
     heartbeat_thread.join()
 
     # Turn the light on our way out...

@@ -193,6 +193,39 @@ def initiate_shutdown():
     global are_we_running
     are_we_running = False
 
+def download_modules(config):
+    # Read from the configuration the list of required packages/modules required by the script
+    # Download/update each of the said packages/modules
+
+    logging.info('Downloading required modules...')
+
+    # Access specific configuration values
+    script_language = config.get('scriptablebeat', {}).get('language', 'bash')
+    script_required_modules = config.get('scriptablebeat', {}).get('required_modules', [])
+
+    logging.debug('Language: %s', script_language)
+    logging.debug('Required modules: %s', script_required_modules)
+
+    if script_language == 'python':
+        # Install the required modules
+        for module in script_required_modules:
+            logging.info('Installing Python module: %s ...', module)
+            os.system('pip3 install ' + module)
+
+
+    if script_language == 'bash':
+        # Install the required modules
+        for module in script_required_modules:
+            logging.info('Installing system module or command: %s ...', module)
+            os.system('apt-get install -y ' + module)
+    
+    if script_language == 'powershell':
+        # Install the required modules
+        for module in script_required_modules:
+            logging.info('Installing Powertshell module: %s ...', module)
+            os.system('Install-Module -Name ' + module)
+
+
 if __name__ == "__main__":
     logging.info('--------------')
     logging.info('%s v%s - Starting - 🚀', beat_name, __version__)
@@ -206,17 +239,9 @@ if __name__ == "__main__":
         exit(1)
 
     # Access specific configuration values
-    script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
-    script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
-    script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
-    script_language = config.get('scriptablebeat', {}).get('language', 'bash')
     beatIdentifier = config.get('scriptablebeat', {}).get('beatIdentifier', '')
 
     logging.debug('Configuration: %s', config)
-    # logging.debug('script_language: %s', script_language)
-    # logging.debug('script__first_run: %s', script__first_run)
-    # logging.debug('script__startup_run: %s', script__startup_run)
-    # logging.debug('script__scheduled_run: %s', script__scheduled_run)
 
     # Connect to the Lumberjack Server
     lumberjack_client = connect_to_lumberjack_server(config)
@@ -228,11 +253,33 @@ if __name__ == "__main__":
     heartbeat_thread = threading.Thread(target=heartbeat_background_job, args=(lumberjack_client, 2, 'Service is Running'))
     heartbeat_thread.start()
 
+    # Give a chance to the heartbeat to send the first message
+    time.sleep(0.5)
+
+    # - Start run sequence (only passing to next step on success of each step):
+    #   - [x] Read the configuration file
+    #   - [x] Establish comms with OC/SMA and other internal Beat required prep tasks
+    #   - [x] Enable Heartbeat
+    #   - [x] Read from the configuration the list of required packages/modules required by the script
+    #   - [x] Download/update each of the said packages/modules
+    #   - [ ] Run First Run script (only once, at the very first startup)
+    #   - [ ] Run Startup script (at each startup)
+    #   - [ ] Run Scheduler
+
+    # Get modules from config, then download and install them
+    download_modules(config)
+
+    # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
+    # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
+    # script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
+
     # Do stuff
-    logging.debug('Do dummy stuff for 10 seconds...')
-    time.sleep(10)
-    initiate_shutdown()
-    logging.debug('Done doing dummy stuff')
+    logging.debug('Do dummy stuff for 10 seconds...') # TODO: Remove this
+    time.sleep(10) # TODO: Remove this
+    initiate_shutdown() # TODO: Remove this
+    logging.debug('Done doing dummy stuff') # TODO: Remove this
+
+    # Shutting down sequence
 
     # Bring the threads to the yard...
     logging.info('Waiting for threads to finish...')

@@ -43,13 +43,20 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
   - JSON log as-is
   - Plain text that needs to be encoded into a JSON field
 - How to handle STDERR
+  - Report as log message in the stream
   - Report as error in the stream
   - Log in Beats own logs
   - All of the above
   - Ignore
-- How to handle STDOUT if log data is coming out of File/Folder
-  - Report as error in the stream
+- How to handle STDOUT
   - Report as log message in the stream
+  - Report as error in the stream
+  - Log in Beats own logs
+  - All of the above
+  - Ignore
+- How to handle files' content
+  - Report as log message in the stream
+  - Report as error in the stream
   - Log in Beats own logs
   - All of the above
   - Ignore

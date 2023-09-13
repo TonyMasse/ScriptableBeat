@@ -38,10 +38,7 @@ def read_config():
         logging.error('Error reading config file: %s', str(e))
         return None
 
-def connect_to_lumberjack_server():
-    # Read the configuration
-    config = read_config()
-
+def connect_to_lumberjack_server(config):
     if config:
         # Access specific configuration values
         output = config.get('output', {})
@@ -50,6 +47,7 @@ def connect_to_lumberjack_server():
         logstash__host = logstash__hosts[0].split(":")[0]
         logstash__port = int(logstash__hosts[0].split(":")[1])
         logstash__ssl_enable = output__logstash.get('ssl_enable', False)
+        logstash__timeout = output__logstash.get('timeout', 30)
 
         logging.info('Output configuration: %s', output)
 
@@ -57,7 +55,8 @@ def connect_to_lumberjack_server():
         client = PyLogBeatClient(
             logstash__host,
             logstash__port,
-            ssl_enable=logstash__ssl_enable
+            ssl_enable=logstash__ssl_enable,
+            timeout=logstash__timeout
         )
 
         # Connect to the client
@@ -180,7 +179,7 @@ if __name__ == "__main__":
     logging.debug('script__scheduled: %s', script__scheduled)
 
     # Connect to the Lumberjack Server
-    lumberjack_client = connect_to_lumberjack_server()
+    lumberjack_client = connect_to_lumberjack_server(config)
     if lumberjack_client is None:
         logging.error('No connection to Lumberjack serve could be established. Exiting.')
         exit(1)

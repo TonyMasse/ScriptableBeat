@@ -1,9 +1,8 @@
 scriptablebeat:
   language: python
-  modules:
-    - yaml
-    - requests
-    - time
+  required_modules:
+  - PyYAML
+  - requests
   scripts:
     first_run: |
       import time

@@ -70,10 +70,12 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
 
 ### At startup
 
-- Read from the configuration the list of required packages/modules required by the script
-- Download/update each of the said packages/modules
 - Start run sequence (only passing to next step on success of each step):
+  - Read the configuration file
   - Establish comms with OC/SMA and other internal Beat required prep tasks
+  - Enable Heartbeat
+  - Read from the configuration the list of required packages/modules required by the script
+  - Download/update each of the said packages/modules
   - Run First Run script (only once, at the very first startup)
   - Run Startup script (at each startup)
   - Run Scheduler

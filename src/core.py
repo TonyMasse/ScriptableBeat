@@ -228,12 +228,15 @@ def download_modules(config):
 def run_script(script):
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
     if script_language == 'python':
+        logging.info('Running Python script from local file "%s"...', script)
         os.system('python3 ' + script)
 
     if script_language == 'bash':
+        logging.info('Running Bash script from local file "%s"...', script)
         os.system('bash ' + script)
     
     if script_language == 'powershell':
+        logging.info('Running PowerShell script from local file "%s"...', script)
         os.system('pwsh ' + script)
 
 def run_script_first_run(config):

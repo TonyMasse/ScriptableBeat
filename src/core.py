@@ -189,7 +189,7 @@ def heartbeat_background_job(lumberjack_client, status_code = 2, status_descript
     send_heartbeat(lumberjack_client, 3, 'Service is Stopped')
 
 def initiate_shutdown():
-    logging.info('Shutdown requested. 🛑')
+    logging.info('Shutdown initiated. 🛑')
     global are_we_running
     are_we_running = False
 

@@ -22,6 +22,10 @@ scriptablebeat:
     restart_script_on_error: true
     restart_script_on_crash: true
   data_stream:
+    capture:
+      first_run: true
+      startup_run: true
+      scheduled_run: true
     format: text
     # format: json
     moniror_sources:

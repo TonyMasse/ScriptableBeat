@@ -37,7 +37,11 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
   - Frequency?
   - Restart on Error?
   - Restart on Crash?
-- Dictate if the log data is meant to be coming out of STDOUT or file/folder
+- Dictate if the log data is meant to be coming out of STDOUT, STDERR, file/folder or any mix and match
+- Dictate which script needs to be monitored
+  - First Run script
+  - Startup script
+  - Scheduled script
 - File/Folder path
 - How to treat output:
   - JSON log as-is

@@ -210,7 +210,7 @@ def download_modules(config):
         # Install the required modules
         for module in script_required_modules:
             logging.info('Installing Python module: %s ...', module)
-            os.system('pip3 install ' + module)
+            os.system('pip3 install --no-input --no-color --disable-pip-version-check --quiet --quiet ' + module)
 
 
     if script_language == 'bash':

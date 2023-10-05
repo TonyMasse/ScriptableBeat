@@ -12,12 +12,16 @@ scriptablebeat:
       print("Do some stuff only on first run, and error it out", file=sys.stderr)
     startup_run: |
       import time
+      import sys
 
       print("Do some startup stuff")
+      print("Do some startup stuff, and error it out", file=sys.stderr)
     scheduled_run: |
       import time
+      import sys
 
       print("Hello, World!")
+      print("Hello, World!, and error it out", file=sys.stderr)
   scheduler:
     run_mode: keep_running
     frequency: 1h

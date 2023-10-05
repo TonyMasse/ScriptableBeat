@@ -6,6 +6,8 @@ import datetime
 import json
 import threading
 from locallib.pyLogBeat import PyLogBeatClient
+import subprocess
+import select
 
 __version__ = '0.1'
 beat_name = 'ScriptableBeat'
@@ -193,6 +195,42 @@ def initiate_shutdown():
     global are_we_running
     are_we_running = False
 
+def send_message_to_stream(lumberjack_client, log_payload = None, error_payload = None):
+    if lumberjack_client is None:
+        logging.debug('No connection to Lumberjack server is established. Message cannot be sent.')
+        return None
+
+    # Time in seconds since the epoch
+    time_ISO8601 = datetime.datetime.now().isoformat()
+
+    # Get the hostname
+    hostname = os.uname()[1]
+
+    # Get the beat identifier from the configuration
+    beatIdentifier = config.get(beat_name.lower(), {}).get('beatIdentifier', '')
+
+    message = {
+        '@timestamp': time_ISO8601,
+        'fullyqualifiedbeatname': "_".join([beat_name.lower(), beatIdentifier]),
+        '@version': '1',
+        'beat': {
+            'hostname': hostname,
+            'version': __version__,
+            'name': hostname
+        },
+        'host': {
+            'name': hostname
+        }
+    }
+
+    if log_payload is not None:
+        message['message'] = log_payload
+
+    if error_payload is not None:
+        message['errormessage'] = error_payload
+
+    lumberjack_client.send([message])
+
 def download_modules(config):
     # Read from the configuration the list of required packages/modules required by the script
     # Download/update each of the said packages/modules
@@ -225,26 +263,67 @@ def download_modules(config):
             logging.info('Installing Powertshell module: %s ...', module)
             os.system('Install-Module -Name ' + module)
 
-def run_script(script):
+def run_script(script, capture_output = False, lumberjack_client = None):
     script_language = config.get('scriptablebeat', {}).get('language', 'bash')
+    data_stream__format = config.get('scriptablebeat', {}).get('data_stream', {}).get('format', 'text')
+    data_stream__monitor_sources = config.get('scriptablebeat', {}).get('data_stream', {}).get('moniror_sources', [])
 
-    # TODO: capture output
+    data_stream__stdout__report_as_log_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('stdout', {}).get('report_as_log_in_stream', False)
+    data_stream__stdout__report_as_error_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('stdout', {}).get('report_as_error_in_stream', False)
+    data_stream__stdout__log_in_beats_log = config.get('scriptablebeat', {}).get('data_stream', {}).get('stdout', {}).get('log_in_beats_log', False)
+
+    data_stream__stderr__report_as_log_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('stderr', {}).get('report_as_log_in_stream', False)
+    data_stream__stderr__report_as_error_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('stderr', {}).get('report_as_error_in_stream', False)
+    data_stream__stderr__log_in_beats_log = config.get('scriptablebeat', {}).get('data_stream', {}).get('stderr', {}).get('log_in_beats_log', False)
 
     if script_language == 'python':
         logging.info('Running Python script from local file "%s"...', script)
-        os.system('python3 ' + script)
+        process = subprocess.Popen(["python3", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     if script_language == 'bash':
         logging.info('Running Bash script from local file "%s"...', script)
-        os.system('bash ' + script)
+        process = subprocess.Popen(["bash", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     
     if script_language == 'powershell':
         logging.info('Running PowerShell script from local file "%s"...', script)
-        os.system('pwsh ' + script)
+        process = subprocess.Popen(["pwsh", script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    if process is None:
+        logging.error('Error running script.')
+        return None
 
-def run_script_first_run(config):
+    if capture_output:
+        # Create a set to hold file descriptors for monitoring
+        fd_set = [process.stdout, process.stderr]
+
+        # Monitor the command's output in real-time
+        while fd_set:
+            ready_to_read, _, _ = select.select(fd_set, [], [])
+            for fd in ready_to_read:
+                line = fd.readline()
+                if line:
+                    # if fd is process.stdout and data_stream__monitor_sources.count('stdout') > 0:
+                    if fd is process.stdout and 'stdout' in data_stream__monitor_sources:
+                        send_message_to_stream(lumberjack_client, line if data_stream__stdout__report_as_log_in_stream else None, line if data_stream__stdout__report_as_error_in_stream else None)
+                        if data_stream__stdout__log_in_beats_log:
+                            logging.info(line)
+                    # elif fd is process.stderr and data_stream__monitor_sources.count('stderr') > 0:
+                    elif fd is process.stderr and 'stderr' in data_stream__monitor_sources:
+                        send_message_to_stream(lumberjack_client, line if data_stream__stderr__report_as_log_in_stream else None, line if data_stream__stderr__report_as_error_in_stream else None)
+                        if data_stream__stderr__log_in_beats_log:
+                            logging.error(line)
+                else:
+                    fd_set.remove(fd)
+
+    # Wait for the command to finish
+    process.wait()
+
+    logging.info('Script run finished ("%s")', script)
+
+def run_script_first_run(config, lumberjack_client = None):
     # Run the first run script only once, at the very first startup
     script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
+    data_stream__capture__first_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('first_run', False)
 
     state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     first_script_file_name = 'script.first_run'
@@ -259,7 +338,7 @@ def run_script_first_run(config):
                 file.write(script__first_run)
 
             logging.info("Running first_run script...")
-            run_script(first_script_file_path)
+            run_script(first_script_file_path, data_stream__capture__first_run, lumberjack_client)
     except Exception as e:
         logging.error('Error running first run script: %s', str(e))
 
@@ -307,7 +386,7 @@ if __name__ == "__main__":
     download_modules(config)
 
     # Run the first run script only once, at the very first startup
-    run_script_first_run(config)
+    run_script_first_run(config, lumberjack_client)
 
     # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
@@ -315,7 +394,7 @@ if __name__ == "__main__":
 
     # Do stuff
     logging.debug('Do dummy stuff for 10 seconds...') # TODO: Remove this
-    time.sleep(10) # TODO: Remove this
+    time.sleep(3) # TODO: Remove this
     initiate_shutdown() # TODO: Remove this
     logging.debug('Done doing dummy stuff') # TODO: Remove this
 

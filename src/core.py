@@ -361,6 +361,9 @@ def run_script_startup_run(config, lumberjack_client = None):
     except Exception as e:
         logging.error('Error running first run script: %s', str(e))
 
+# TODO: Run the scheduled script
+# TODO: Run the scheduled script at the scheduled time
+
 if __name__ == "__main__":
     logging.info('--------------')
     logging.info('%s v%s - Starting - 🚀', beat_name, __version__)

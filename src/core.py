@@ -359,10 +359,46 @@ def run_script_startup_run(config, lumberjack_client = None):
         logging.info("Running startup_run script...")
         run_script(startup_script_file_path, data_stream__capture__startup_run, lumberjack_client)
     except Exception as e:
-        logging.error('Error running first run script: %s', str(e))
+        logging.error('Error running startup run script: %s', str(e))
 
-# TODO: Run the scheduled script
-# TODO: Run the scheduled script at the scheduled time
+def run_script_scheduled_run(config, lumberjack_client = None):
+    # Run the scheduled run script on each tick of the scheduler
+    script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', None)
+    data_stream__capture__scheduled_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('scheduled_run', False)
+
+    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    scheduled_script_file_name = 'script.scheduled_run'
+    scheduled_script_file_path = os.path.join(state_folder_path, scheduled_script_file_name)
+
+    try:
+        logging.info('Storing scheduled_run script into local file: "%s"...', scheduled_script_file_path)
+        with open(scheduled_script_file_path, "w") as file:
+            file.write(script__scheduled_run)
+
+        logging.info("Running scheduled_run script...")
+        run_script(scheduled_script_file_path, data_stream__capture__scheduled_run, lumberjack_client)
+    except Exception as e:
+        logging.error('Error running scheduled run script: %s', str(e))
+
+def script_scheduled_run_background_job(config, lumberjack_client):
+    # Run the first occurence
+    run_script_scheduled_run(config, lumberjack_client)
+
+    scheduler_interval = config.get('scriptablebeat', {}).get('scheduler', {}).get('frequency', '1m')
+    scheduler_interval_seconds = 1.5 # TODO: Convert the scheduler_interval to seconds
+    logging.info('Scheduler interval is %s seconds.', scheduler_interval_seconds)
+
+    # Cycling through the scheduler interval
+    # At one second intervals, so we can check for a shutdown request
+    second_counter = 0
+    while are_we_running:
+        second_counter += 1
+        time.sleep(1)
+        if second_counter >= scheduler_interval_seconds:
+            second_counter = 0
+            run_script_scheduled_run(config, lumberjack_client)
+            # TODO: Add a check to see if the previous run of the script has finished, and if not, wait for it to finish before running the next one
+
 
 if __name__ == "__main__":
     logging.info('--------------')
@@ -400,9 +436,9 @@ if __name__ == "__main__":
     #   - [x] Enable Heartbeat
     #   - [x] Read from the configuration the list of required packages/modules required by the script
     #   - [x] Download/update each of the said packages/modules
-    #   - [ ] Run First Run script (only once, at the very first startup)
-    #   - [ ] Run Startup script (at each startup)
-    #   - [ ] Run Scheduler
+    #   - [x] Run First Run script (only once, at the very first startup)
+    #   - [x] Run Startup script (at each startup)
+    #   - [x] Run Scheduler
 
     # Get modules from config, then download and install them
     download_modules(config)
@@ -413,13 +449,17 @@ if __name__ == "__main__":
     # Run the startup script
     run_script_startup_run(config, lumberjack_client)
 
+    # Set the scheduler job in its own thread
+    scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
+    scheduler_thread.start()
+
     # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
     # script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
 
     # Do stuff
     logging.debug('Do dummy stuff for 10 seconds...') # TODO: Remove this
-    time.sleep(3) # TODO: Remove this
+    time.sleep(10) # TODO: Remove this
     initiate_shutdown() # TODO: Remove this
     logging.debug('Done doing dummy stuff') # TODO: Remove this
 
@@ -427,6 +467,7 @@ if __name__ == "__main__":
 
     # Bring the threads to the yard...
     logging.info('Waiting for threads to finish...')
+    scheduler_thread.join()
     heartbeat_thread.join()
 
     # Turn the light on our way out...

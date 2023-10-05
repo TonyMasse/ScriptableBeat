@@ -342,6 +342,25 @@ def run_script_first_run(config, lumberjack_client = None):
     except Exception as e:
         logging.error('Error running first run script: %s', str(e))
 
+def run_script_startup_run(config, lumberjack_client = None):
+    # Run the startup run script at each startup
+    script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', None)
+    data_stream__capture__startup_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('startup_run', False)
+
+    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    startup_script_file_name = 'script.startup_run'
+    startup_script_file_path = os.path.join(state_folder_path, startup_script_file_name)
+
+    try:
+        logging.info('Storing startup_run script into local file: "%s"...', startup_script_file_path)
+        with open(startup_script_file_path, "w") as file:
+            file.write(script__startup_run)
+
+        logging.info("Running startup_run script...")
+        run_script(startup_script_file_path, data_stream__capture__startup_run, lumberjack_client)
+    except Exception as e:
+        logging.error('Error running first run script: %s', str(e))
+
 if __name__ == "__main__":
     logging.info('--------------')
     logging.info('%s v%s - Starting - 🚀', beat_name, __version__)
@@ -387,6 +406,9 @@ if __name__ == "__main__":
 
     # Run the first run script only once, at the very first startup
     run_script_first_run(config, lumberjack_client)
+
+    # Run the startup script
+    run_script_startup_run(config, lumberjack_client)
 
     # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')

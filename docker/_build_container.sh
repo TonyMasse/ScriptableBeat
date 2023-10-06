@@ -50,7 +50,9 @@ docker build --file ../docker/Dockerfile -t tonymasse/scriptable_beat:v$SCRIPTAB
 if [[ "$*" == *--no-publish* ]]; then
   echo "⚠️  Skipping container publish"
 else
-  docker push --all-tags tonymasse/scriptable_beat
+  docker push tonymasse/scriptable_beat:v$SCRIPTABLE_BASE_VERSION
+  docker push tonymasse/scriptable_beat:v$SCRIPTABLE_BEAT_VERSION
+  docker push tonymasse/scriptable_beat:latest
 fi
 
 # Check for vulnerabilities

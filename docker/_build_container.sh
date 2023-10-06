@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Base version
-export SCRIPTABLE_BASE_VERSION=0.1
+export SCRIPTABLE_BASE_VERSION=0.5
 export SCRIPTABLE_BEAT_VERSION=$SCRIPTABLE_BASE_VERSION.`date --utc +%Y%m%d_%H%M%S`
 
 # Some fancy help message

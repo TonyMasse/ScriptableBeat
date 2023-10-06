@@ -10,7 +10,7 @@ from locallib.pyLogBeat import PyLogBeatClient
 import subprocess
 import select
 
-__version__ = '0.1'
+__version__ = '0.5'
 beat_name = 'ScriptableBeat'
 are_we_running = True
 are_we_paused = False

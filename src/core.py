@@ -16,7 +16,6 @@ are_we_running = True
 
 # Set the logging level and format
 logging.basicConfig(level=logging.INFO if os.environ.get('MODE') != 'DEV' else logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
-# logging.getLogger('pylogbeat').setLevel(logging.DEBUG)
 
 # Get the base directory of the script
 base_script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -197,9 +196,8 @@ def initiate_shutdown():
         logging.info('Shutdown initiated. 🛑')
     are_we_running = False
 
-# Define a function to handle SIGTERM and SIGHUP signals
+# Handle SIGTERM and SIGHUP signals
 def handle_signals(signum, frame):
-    # print(f"Received signal {signum}. Shutting down gracefully...")
     logging.info("Received signal %s. Shutting down gracefully...", signum)
     initiate_shutdown()
 
@@ -422,7 +420,6 @@ def script_scheduled_run_background_job(config, lumberjack_client):
         if second_counter >= scheduler_interval_seconds:
             second_counter = 0
             run_script_scheduled_run(config, lumberjack_client)
-            # TODO: Add a check to see if the previous run of the script has finished, and if not, wait for it to finish before running the next one
 
 
 if __name__ == "__main__":
@@ -484,10 +481,6 @@ if __name__ == "__main__":
             # Set the scheduler job in its own thread
             scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
             scheduler_thread.start()
-
-            # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
-            # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
-            # script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
 
             # Waiting to told to shutdown
             # At one second intervals, so we can check for a shutdown request

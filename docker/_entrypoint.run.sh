@@ -35,4 +35,4 @@ echo "#########################################################"
 echo ""
 
 # TODO: Replace this with the actual command to run
-tail -f /dev/null
+python3 bin/core.py

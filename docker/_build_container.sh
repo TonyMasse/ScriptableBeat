@@ -27,6 +27,7 @@ fi
 
 # Make sure `dist`, `dist/docker` and `dist/config.dist` folders exist
 mkdir -p ../dist/docker
+mkdir -p ../dist/bin/locallib
 mkdir -p ../dist/config.dist
 
 # Drop the beat version to the dist folder
@@ -34,6 +35,10 @@ echo $SCRIPTABLE_BEAT_VERSION > ../dist/VERSION
 
 # Copy Docker Entrypoint files to the dist/docker folder
 cp _entrypoint.* ../dist/docker/
+
+# Copy the beat binary to the dist/bin folder
+cp ../src/*.py ../dist/bin/
+cp ../src/locallib/*.py ../dist/bin/locallib/
 
 # Get the latest ubuntu image
 docker pull ubuntu:22.04

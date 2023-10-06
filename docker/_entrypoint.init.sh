@@ -31,3 +31,6 @@ echo "### COPYING TEMPLATE CONFIGURATION..."
 mkdir -p /beats/scriptablebeat/config
 # Copy the template configuration
 cp --no-clobber --recursive config.dist/* /beats/scriptablebeat/config/
+
+# Prepare the state directory
+mkdir -p /beats/scriptablebeat/state

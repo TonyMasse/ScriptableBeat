@@ -1,3 +1,4 @@
+import signal
 import os
 import yaml
 import logging
@@ -191,9 +192,16 @@ def heartbeat_background_job(lumberjack_client, status_code = 2, status_descript
     send_heartbeat(lumberjack_client, 3, 'Service is Stopped')
 
 def initiate_shutdown():
-    logging.info('Shutdown initiated. 🛑')
     global are_we_running
+    if are_we_running:
+        logging.info('Shutdown initiated. 🛑')
     are_we_running = False
+
+# Define a function to handle SIGTERM and SIGHUP signals
+def handle_signals(signum, frame):
+    # print(f"Received signal {signum}. Shutting down gracefully...")
+    logging.info("Received signal %s. Shutting down gracefully...", signum)
+    initiate_shutdown()
 
 def send_message_to_stream(lumberjack_client, log_payload = None, error_payload = None):
     if lumberjack_client is None:
@@ -290,7 +298,7 @@ def run_script(script, capture_output = False, lumberjack_client = None):
     
     if process is None:
         logging.error('Error running script.')
-        return None
+        return 255 # Bad exectution (non 0)
 
     if capture_output:
         # Create a set to hold file descriptors for monitoring
@@ -315,10 +323,11 @@ def run_script(script, capture_output = False, lumberjack_client = None):
                 else:
                     fd_set.remove(fd)
 
-    # Wait for the command to finish
-    process.wait()
+    # Wait for the command to finish and grab the return code
+    exit_code = process.wait()
 
     logging.info('Script run finished ("%s")', script)
+    return exit_code
 
 def run_script_first_run(config, lumberjack_client = None):
     # Run the first run script only once, at the very first startup
@@ -338,9 +347,10 @@ def run_script_first_run(config, lumberjack_client = None):
                 file.write(script__first_run)
 
             logging.info("Running first_run script...")
-            run_script(first_script_file_path, data_stream__capture__first_run, lumberjack_client)
+            return run_script(first_script_file_path, data_stream__capture__first_run, lumberjack_client)
     except Exception as e:
         logging.error('Error running first run script: %s', str(e))
+        return 255 # Bad exectution (non 0)
 
 def run_script_startup_run(config, lumberjack_client = None):
     # Run the startup run script at each startup
@@ -357,9 +367,10 @@ def run_script_startup_run(config, lumberjack_client = None):
             file.write(script__startup_run)
 
         logging.info("Running startup_run script...")
-        run_script(startup_script_file_path, data_stream__capture__startup_run, lumberjack_client)
+        return run_script(startup_script_file_path, data_stream__capture__startup_run, lumberjack_client)
     except Exception as e:
         logging.error('Error running startup run script: %s', str(e))
+        return 255 # Bad exectution (non 0)
 
 def run_script_scheduled_run(config, lumberjack_client = None):
     # Run the scheduled run script on each tick of the scheduler
@@ -376,17 +387,31 @@ def run_script_scheduled_run(config, lumberjack_client = None):
             file.write(script__scheduled_run)
 
         logging.info("Running scheduled_run script...")
-        run_script(scheduled_script_file_path, data_stream__capture__scheduled_run, lumberjack_client)
+        return run_script(scheduled_script_file_path, data_stream__capture__scheduled_run, lumberjack_client)
     except Exception as e:
         logging.error('Error running scheduled run script: %s', str(e))
+        return 255 # Bad exectution (non 0)
 
 def script_scheduled_run_background_job(config, lumberjack_client):
+    scheduler_interval = config.get('scriptablebeat', {}).get('scheduler', {}).get('frequency', '1m')
+    # Convert the scheduler_interval from the config into seconds
+    if scheduler_interval.endswith('s'):
+        scheduler_interval_seconds = int(scheduler_interval[:-1])
+    elif scheduler_interval.endswith('m'):
+        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60
+    elif scheduler_interval.endswith('h'):
+        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60 * 60
+    elif scheduler_interval.endswith('d'):
+        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60 * 60 * 24
+    else:
+        scheduler_interval_seconds = int(scheduler_interval)
+    if scheduler_interval_seconds is None or scheduler_interval_seconds < 1:
+        scheduler_interval_seconds = 60
+        
+    logging.info('Scheduler interval is %s seconds ("%s" per the configuration). ⏱️', scheduler_interval_seconds, scheduler_interval)
+
     # Run the first occurence
     run_script_scheduled_run(config, lumberjack_client)
-
-    scheduler_interval = config.get('scriptablebeat', {}).get('scheduler', {}).get('frequency', '1m')
-    scheduler_interval_seconds = 1.5 # TODO: Convert the scheduler_interval to seconds
-    logging.info('Scheduler interval is %s seconds.', scheduler_interval_seconds)
 
     # Cycling through the scheduler interval
     # At one second intervals, so we can check for a shutdown request
@@ -404,6 +429,11 @@ if __name__ == "__main__":
     logging.info('--------------')
     logging.info('%s v%s - Starting - 🚀', beat_name, __version__)
     logging.info('--------------')
+    logging.info('Press [CTRL] + [C] or send SIGTERM or SIGHUP to stop.')
+
+    # Register the signal handler
+    signal.signal(signal.SIGTERM, handle_signals)
+    signal.signal(signal.SIGHUP, handle_signals)
 
     # Read the configuration
     config = read_config()
@@ -444,31 +474,43 @@ if __name__ == "__main__":
     download_modules(config)
 
     # Run the first run script only once, at the very first startup
-    run_script_first_run(config, lumberjack_client)
+    first_run_exit_code = run_script_first_run(config, lumberjack_client)
 
-    # Run the startup script
-    run_script_startup_run(config, lumberjack_client)
+    if first_run_exit_code == 0:
+        # Run the startup script
+        startup_run_exit_code = run_script_startup_run(config, lumberjack_client)
 
-    # Set the scheduler job in its own thread
-    scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
-    scheduler_thread.start()
+        if startup_run_exit_code == 0:
+            # Set the scheduler job in its own thread
+            scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
+            scheduler_thread.start()
 
-    # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
-    # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
-    # script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
+            # script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
+            # script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', '')
+            # script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', '')
 
-    # Do stuff
-    logging.debug('Do dummy stuff for 10 seconds...') # TODO: Remove this
-    time.sleep(10) # TODO: Remove this
-    initiate_shutdown() # TODO: Remove this
-    logging.debug('Done doing dummy stuff') # TODO: Remove this
+            # Waiting to told to shutdown
+            # At one second intervals, so we can check for a shutdown request
+            try:
+                while are_we_running:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                logging.info('Keyboard interrupt detected. Exiting.')
+        else:
+            logging.error('Startup script failed with error code %s. Exiting.', startup_run_exit_code)
+    else:
+        logging.error('First run script failed with error code %s. Exiting.', first_run_exit_code)
 
     # Shutting down sequence
+    initiate_shutdown()
 
-    # Bring the threads to the yard...
-    logging.info('Waiting for threads to finish...')
-    scheduler_thread.join()
-    heartbeat_thread.join()
+    if scheduler_thread is not None:
+        if scheduler_thread.is_alive():
+            logging.info('Waiting for scheduler thread to finish...')
+            scheduler_thread.join()
+    if heartbeat_thread.is_alive():
+        logging.info('Waiting for heartbeat thread to finish...')
+        heartbeat_thread.join()
 
     # Turn the light on our way out...
     lumberjack_client.close() # 😘

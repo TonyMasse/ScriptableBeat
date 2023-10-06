@@ -13,6 +13,7 @@ import select
 __version__ = '0.1'
 beat_name = 'ScriptableBeat'
 are_we_running = True
+are_we_paused = False
 
 # Set the logging level and format
 logging.basicConfig(level=logging.INFO if os.environ.get('MODE') != 'DEV' else logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s')
@@ -39,6 +40,59 @@ def read_config():
         logging.error('Error reading config file: %s', str(e))
         return None
 
+def pause():
+    global are_we_paused
+    are_we_paused = True
+
+def unpause():
+    global are_we_paused
+    are_we_paused = False
+
+def reconnect_to_lumberjack_server(lumberjack_client, exception_safe = True):
+    if lumberjack_client is None:
+        logging.error('No valid Lumberjack object to try to reconnect. Failing to reconnect.')
+        return None
+
+    # Have you tried turning it off and on again?
+
+    # First Pause the scheduler
+    pause()
+
+    are_we_connected = False
+    lumberjack_retry_delay = 5
+    lumberjack_max_retry = 10000
+    second_counter = 0
+    lumberjack_retry = 0
+    while are_we_running and not are_we_connected and lumberjack_max_retry > lumberjack_retry:
+        second_counter += 1
+        if second_counter >= lumberjack_retry_delay:
+            second_counter = 0
+            lumberjack_retry += 1
+
+            try:
+                lumberjack_client.close()
+            except Exception as e:
+                logging.error('Error closing Lumberjack connection: %s', str(e))
+    
+            try:
+                logging.info('Connecting to Lumberjack Server (attempt %s)...', lumberjack_retry)
+                are_we_connected = False
+                lumberjack_client.connect()
+                are_we_connected = True
+            except Exception as e:
+                logging.error('Error connecting to Lumberjack Server: %s. Will retry to connect in %s seconds', str(e), lumberjack_retry_delay)
+                are_we_connected = False
+        time.sleep(1)
+
+    if not exception_safe and are_we_running and not are_we_connected and lumberjack_max_retry <= lumberjack_retry:
+        raise Exception("Too many retries to connect to Lumberjack Server.")
+
+    # Then unpause the scheduler
+    if are_we_running:
+        unpause()
+
+    return None
+
 def connect_to_lumberjack_server(config):
     if config:
         # Access specific configuration values
@@ -63,7 +117,7 @@ def connect_to_lumberjack_server(config):
         # Connect to the client
         logging.info('Connecting to Lumberjack Server on host "%s", port "%s"...', logstash__host, logstash__port)
         try:
-            client.connect()
+            reconnect_to_lumberjack_server(client, False)
             logging.info('Connected to Lumberjack Server (%s:%s).', logstash__host, logstash__port)
             return client
         except Exception as e:
@@ -115,7 +169,11 @@ def send_heartbeat(lumberjack_client, status_code, status_description):
 
     logging.debug('Sending Heartbeat with status "%s" (%s)... ❤️', status_description, status_code)
 
-    lumberjack_client.send([message])
+    try:
+        lumberjack_client.send([message])
+    except Exception as e:
+        logging.error('Error sending message to Lumberjack server: %s', str(e))
+
 
     # Results in this in LogStash:
     # {
@@ -201,6 +259,20 @@ def handle_signals(signum, frame):
     logging.info("Received signal %s. Shutting down gracefully...", signum)
     initiate_shutdown()
 
+def lumberjack_safe_send(lumberjack_client, jsonPayload):
+    if lumberjack_client is None:
+        logging.debug('No connection to Lumberjack server is established. Message cannot be sent.')
+        return None
+
+    try:
+        lumberjack_client.connect() # Trying to reconnect if we had lost the connection
+        lumberjack_client.send(jsonPayload)
+    except Exception as e:
+        logging.error('Error sending message to Lumberjack server: %s', str(e))
+
+        # Trying to reconnect completely
+        reconnect_to_lumberjack_server(lumberjack_client)
+
 def send_message_to_stream(lumberjack_client, log_payload = None, error_payload = None):
     if lumberjack_client is None:
         logging.debug('No connection to Lumberjack server is established. Message cannot be sent.')
@@ -235,7 +307,7 @@ def send_message_to_stream(lumberjack_client, log_payload = None, error_payload 
     if error_payload is not None:
         message['errormessage'] = error_payload
 
-    lumberjack_client.send([message])
+    lumberjack_safe_send(lumberjack_client, [message])
 
 def download_modules(config):
     # Read from the configuration the list of required packages/modules required by the script
@@ -312,12 +384,12 @@ def run_script(script, capture_output = False, lumberjack_client = None):
                     if fd is process.stdout and 'stdout' in data_stream__monitor_sources:
                         send_message_to_stream(lumberjack_client, line if data_stream__stdout__report_as_log_in_stream else None, line if data_stream__stdout__report_as_error_in_stream else None)
                         if data_stream__stdout__log_in_beats_log:
-                            logging.info(line)
+                            logging.info("External script STDOUT: %s", line)
                     # elif fd is process.stderr and data_stream__monitor_sources.count('stderr') > 0:
                     elif fd is process.stderr and 'stderr' in data_stream__monitor_sources:
                         send_message_to_stream(lumberjack_client, line if data_stream__stderr__report_as_log_in_stream else None, line if data_stream__stderr__report_as_error_in_stream else None)
                         if data_stream__stderr__log_in_beats_log:
-                            logging.error(line)
+                            logging.error("External script STDERR: %s", line)
                 else:
                     fd_set.remove(fd)
 
@@ -339,6 +411,7 @@ def run_script_first_run(config, lumberjack_client = None):
     try:
         if os.path.exists(first_script_file_path):
             logging.info("Not running first run script as it has already been run.")
+            return 0 # Success
         else:
             logging.info('Storing first_run script into local file: "%s"...', first_script_file_path)
             with open(first_script_file_path, "w") as file:
@@ -419,7 +492,10 @@ def script_scheduled_run_background_job(config, lumberjack_client):
         time.sleep(1)
         if second_counter >= scheduler_interval_seconds:
             second_counter = 0
-            run_script_scheduled_run(config, lumberjack_client)
+            if not are_we_paused:
+                run_script_scheduled_run(config, lumberjack_client)
+            else:
+                logging.info('Scheduler is paused.')
 
 
 if __name__ == "__main__":
@@ -444,69 +520,95 @@ if __name__ == "__main__":
 
     logging.debug('Configuration: %s', config)
 
-    # Connect to the Lumberjack Server
-    lumberjack_client = connect_to_lumberjack_server(config)
-    if lumberjack_client is None:
-        logging.error('No connection to Lumberjack server could be established. Exiting.')
-        exit(1)
+    # Connect to the Lumberjack Server. It will try to connect every 10 seconds until it succeeds.
+    lumberjack_client = None
+    lumberjack_client_connection_retry_delay = 10
+    try:
+        second_counter = lumberjack_client_connection_retry_delay
+        while are_we_running and lumberjack_client is None:
+            second_counter += 1
+            if second_counter >= lumberjack_client_connection_retry_delay:
+                second_counter = 0
+                lumberjack_client = connect_to_lumberjack_server(config)
+                if lumberjack_client is None:
+                    logging.error('No connection to Lumberjack server could be established. Retrying in %s seconds...', lumberjack_client_connection_retry_delay)
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logging.info('Keyboard interrupt detected. Exiting.')
 
-    # Set the heartbeat job in its own thread
-    heartbeat_thread = threading.Thread(target=heartbeat_background_job, args=(lumberjack_client, 2, 'Service is Running'))
-    heartbeat_thread.start()
+    if lumberjack_client is not None:
+        # Set the heartbeat job in its own thread
+        heartbeat_thread = threading.Thread(target=heartbeat_background_job, args=(lumberjack_client, 2, 'Service is Running'))
+        heartbeat_thread.start()
 
-    # Give a chance to the heartbeat to send the first message
-    time.sleep(0.5)
+        # Give a chance to the heartbeat to send the first message
+        time.sleep(0.5)
 
-    # - Start run sequence (only passing to next step on success of each step):
-    #   - [x] Read the configuration file
-    #   - [x] Establish comms with OC/SMA and other internal Beat required prep tasks
-    #   - [x] Enable Heartbeat
-    #   - [x] Read from the configuration the list of required packages/modules required by the script
-    #   - [x] Download/update each of the said packages/modules
-    #   - [x] Run First Run script (only once, at the very first startup)
-    #   - [x] Run Startup script (at each startup)
-    #   - [x] Run Scheduler
+        # - Start run sequence (only passing to next step on success of each step):
+        #   - [x] Read the configuration file
+        #   - [x] Establish comms with OC/SMA and other internal Beat required prep tasks
+        #   - [x] Enable Heartbeat
+        #   - [x] Read from the configuration the list of required packages/modules required by the script
+        #   - [x] Download/update each of the said packages/modules
+        #   - [x] Run First Run script (only once, at the very first startup)
+        #   - [x] Run Startup script (at each startup)
+        #   - [x] Run Scheduler
 
-    # Get modules from config, then download and install them
-    download_modules(config)
+        # Get modules from config, then download and install them
+        download_modules(config)
 
-    # Run the first run script only once, at the very first startup
-    first_run_exit_code = run_script_first_run(config, lumberjack_client)
+        # Run the first run script only once, at the very first startup
+        first_run_exit_code = run_script_first_run(config, lumberjack_client)
 
-    if first_run_exit_code == 0:
-        # Run the startup script
-        startup_run_exit_code = run_script_startup_run(config, lumberjack_client)
+        if first_run_exit_code == 0:
+            # Run the startup script
+            startup_run_exit_code = run_script_startup_run(config, lumberjack_client)
 
-        if startup_run_exit_code == 0:
-            # Set the scheduler job in its own thread
-            scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
-            scheduler_thread.start()
+            if startup_run_exit_code == 0:
+                # Set the schedulre to Not Paused
+                unpause()
 
-            # Waiting to told to shutdown
-            # At one second intervals, so we can check for a shutdown request
-            try:
-                while are_we_running:
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                logging.info('Keyboard interrupt detected. Exiting.')
+                # Set the scheduler job in its own thread
+                scheduler_thread = threading.Thread(target=script_scheduled_run_background_job, args=(config, lumberjack_client))
+                scheduler_thread.start()
+
+                # Waiting to told to shutdown
+                # At one second intervals, so we can check for a shutdown request
+                try:
+                    while are_we_running:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    logging.info('Keyboard interrupt detected. Exiting.')
+            else:
+                logging.error('Startup script failed with error code %s. Exiting.', startup_run_exit_code)
         else:
-            logging.error('Startup script failed with error code %s. Exiting.', startup_run_exit_code)
-    else:
-        logging.error('First run script failed with error code %s. Exiting.', first_run_exit_code)
+            logging.error('First run script failed with error code %s. Exiting.', first_run_exit_code)
 
     # Shutting down sequence
     initiate_shutdown()
 
-    if scheduler_thread is not None:
-        if scheduler_thread.is_alive():
-            logging.info('Waiting for scheduler thread to finish...')
-            scheduler_thread.join()
-    if heartbeat_thread.is_alive():
-        logging.info('Waiting for heartbeat thread to finish...')
-        heartbeat_thread.join()
+    try:
+        if scheduler_thread is not None:
+            if scheduler_thread.is_alive():
+                logging.info('Waiting for scheduler thread to finish...')
+                scheduler_thread.join()
+    except NameError:
+        logging.debug('No scheduler thread to wait for.')
+
+    try:
+        if heartbeat_thread is not None:
+            if heartbeat_thread.is_alive():
+                logging.info('Waiting for heartbeat thread to finish...')
+                heartbeat_thread.join()
+    except NameError:
+        logging.debug('No heartbeat thread to wait for.')
 
     # Turn the light on our way out...
-    lumberjack_client.close() # 😘
+    try:
+        if lumberjack_client is not None:
+            lumberjack_client.close() # 😘
+    except NameError:
+        logging.debug('No Lumberjack client to close.')
 
     logging.info('--------------')
     logging.info('%s v%s - Stopped - 🏁', beat_name, __version__)

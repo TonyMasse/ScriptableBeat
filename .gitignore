@@ -1,4 +1,5 @@
 state.dev/script.*
+state.dev/file_positions.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

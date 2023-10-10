@@ -22,9 +22,11 @@ scriptablebeat:
 
       print("Hello, World!")
       print("Hello, World!, and error it out", file=sys.stderr)
+      time.sleep(7)
+      print("Post timer sleep")
   scheduler:
     run_mode: keep_running
-    frequency: 1h
+    frequency: 3s
     restart_script_on_error: true
     restart_script_on_crash: true
   data_stream:

@@ -34,5 +34,13 @@ echo "##                                                     ##"
 echo "#########################################################"
 echo ""
 
-# TODO: Replace this with the actual command to run
+
+echo ""
+echo "#########################################################"
+echo "##                                                     ##"
+echo "##                    RUNNING CORE                     ##"
+echo "##                                                     ##"
+echo "#########################################################"
+echo ""
+
 python3 bin/core.py

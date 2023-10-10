@@ -27,19 +27,19 @@ scriptablebeat:
   scheduler:
     run_mode: keep_running
     frequency: 3s
-    restart_script_on_error: true
-    restart_script_on_crash: true
+    restart_script_on_error: true # NOT YET IMPLEMENTED
+    restart_script_on_crash: true # NOT YET IMPLEMENTED
   data_stream:
     capture:
       first_run: true
       startup_run: true
       scheduled_run: true
     format: text
-    # format: json
+    # format: json  # NOT YET IMPLEMENTED
     moniror_sources:
     - stdout
     - stderr
-    # - files
+    - files
     stdout:
       report_as_log_in_stream: true
       report_as_error_in_stream: false
@@ -56,10 +56,11 @@ scriptablebeat:
       - /var/log/scriptablebeat/scriptablebeat.log
       - /var/log/scriptablebeat/scriptablebeat-*.log
       # after_reading: leave_as_is
-      after_reading: delete
-      # after_reading: flush_to_empty
+      # after_reading: delete
+      after_reading: flush_to_empty
       folder_left_empty: leave_as_is
       # folder_left_empty: delete
+      persist_positions_every: 2s
   heartbeatdisabled: false
   heartbeatinterval: 60
   beatIdentifier: 478_Test_001
@@ -70,16 +71,8 @@ logging.metrics.enabled: false
 logging.to_stderr: true
 output:
   logstash:
-    # backoff.init: 1
-    # backoff.max: 60
-    # bulk_max_size: 2048
-    # compression_level: 3
     hosts:
     # - open_collector:5044
     - 192.168.100.137:5045
-    # loadbalance: false
-    # pipelining: 2
-    # slow_start: false
     timeout: 30
-    # ttl: 0
 

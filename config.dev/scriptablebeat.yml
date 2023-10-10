@@ -75,7 +75,7 @@ logging.to_stderr: true
 output:
   logstash:
     hosts:
-    # - open_collector:5044
-    - 192.168.100.137:5045
+    - open_collector:5044
+    # - 192.168.100.137:5045
     timeout: 30
 

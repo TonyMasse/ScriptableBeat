@@ -35,7 +35,7 @@ scriptablebeat:
       startup_run: true
       scheduled_run: true
     format: text
-    # format: json  # NOT YET IMPLEMENTED
+    # format: json # NOT YET IMPLEMENTED
     moniror_sources:
     - stdout
     - stderr
@@ -53,11 +53,14 @@ scriptablebeat:
       report_as_error_in_stream: false
       log_in_beats_log: false
       paths:
+      - /var/log/scriptablebeat/first_script.log
+      - /var/log/scriptablebeat/startup_script.log
+      - /var/log/scriptablebeat/scheduled_script.log
       - /var/log/scriptablebeat/scriptablebeat.log
       - /var/log/scriptablebeat/scriptablebeat-*.log
-      # after_reading: leave_as_is
+      after_reading: leave_as_is
       # after_reading: delete
-      after_reading: flush_to_empty
+      # after_reading: flush_to_empty
       folder_left_empty: leave_as_is
       # folder_left_empty: delete
       persist_positions_every: 2s

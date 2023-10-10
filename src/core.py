@@ -414,7 +414,6 @@ def run_script_first_run(config, lumberjack_client = None):
     script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     data_stream__capture__first_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('first_run', False)
 
-    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     first_script_file_name = 'script.first_run'
     first_script_file_path = os.path.join(state_folder_path, first_script_file_name)
 
@@ -438,7 +437,6 @@ def run_script_startup_run(config, lumberjack_client = None):
     script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', None)
     data_stream__capture__startup_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('startup_run', False)
 
-    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     startup_script_file_name = 'script.startup_run'
     startup_script_file_path = os.path.join(state_folder_path, startup_script_file_name)
 
@@ -458,7 +456,6 @@ def run_script_scheduled_run(config, lumberjack_client = None):
     script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', None)
     data_stream__capture__scheduled_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('scheduled_run', False)
 
-    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     scheduled_script_file_name = 'script.scheduled_run'
     scheduled_script_file_path = os.path.join(state_folder_path, scheduled_script_file_name)
 

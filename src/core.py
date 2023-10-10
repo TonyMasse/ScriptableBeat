@@ -9,8 +9,9 @@ import threading
 from locallib.pyLogBeat import PyLogBeatClient
 import subprocess
 import select
+import glob
 
-__version__ = '0.5'
+__version__ = '1.0'
 beat_name = 'ScriptableBeat'
 are_we_running = True
 are_we_paused = False
@@ -20,6 +21,15 @@ logging.basicConfig(level=logging.INFO if os.environ.get('MODE') != 'DEV' else l
 
 # Get the base directory of the script
 base_script_dir = os.path.dirname(os.path.realpath(__file__))
+
+# Set the path to the State folder
+state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+
+# File to store the file positions
+file_positions_file_path = os.path.join(state_folder_path, 'file_positions.json')
+
+# Lock for thread-safe access to file_positions_file
+file_positions_file_lock = threading.Lock()
 
 def read_config():
     # Define the path to the config file
@@ -404,7 +414,7 @@ def run_script_first_run(config, lumberjack_client = None):
     script__first_run = config.get('scriptablebeat', {}).get('scripts', {}).get('first_run', None)
     data_stream__capture__first_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('first_run', False)
 
-    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     first_script_file_name = 'script.first_run'
     first_script_file_path = os.path.join(state_folder_path, first_script_file_name)
 
@@ -428,7 +438,7 @@ def run_script_startup_run(config, lumberjack_client = None):
     script__startup_run = config.get('scriptablebeat', {}).get('scripts', {}).get('startup_run', None)
     data_stream__capture__startup_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('startup_run', False)
 
-    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     startup_script_file_name = 'script.startup_run'
     startup_script_file_path = os.path.join(state_folder_path, startup_script_file_name)
 
@@ -448,7 +458,7 @@ def run_script_scheduled_run(config, lumberjack_client = None):
     script__scheduled_run = config.get('scriptablebeat', {}).get('scripts', {}).get('scheduled_run', None)
     data_stream__capture__scheduled_run = config.get('scriptablebeat', {}).get('data_stream', {}).get('capture', {}).get('scheduled_run', False)
 
-    state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
+    # state_folder_path = '/beats/scriptablebeat/state' if os.environ.get('MODE') != 'DEV' else os.path.join(base_script_dir, '..', 'state.dev')
     scheduled_script_file_name = 'script.scheduled_run'
     scheduled_script_file_path = os.path.join(state_folder_path, scheduled_script_file_name)
 
@@ -463,21 +473,28 @@ def run_script_scheduled_run(config, lumberjack_client = None):
         logging.error('Error running scheduled run script: %s', str(e))
         return 255 # Bad exectution (non 0)
 
+def interval_to_seconds(interval, default = 60):
+    # Convert the scheduler_interval from the config into seconds
+    interval_seconds = default
+    if interval.endswith('s'):
+        interval_seconds = int(interval[:-1])
+    elif interval.endswith('m'):
+        interval_seconds = int(interval[:-1]) * 60
+    elif interval.endswith('h'):
+        interval_seconds = int(interval[:-1]) * 60 * 60
+    elif interval.endswith('d'):
+        interval_seconds = int(interval[:-1]) * 60 * 60 * 24
+    else:
+        interval_seconds = int(interval)
+
+    if interval_seconds is None or interval_seconds < 1:
+        interval_seconds = default
+
+    return interval_seconds
+
 def script_scheduled_run_background_job(config, lumberjack_client):
     scheduler_interval = config.get('scriptablebeat', {}).get('scheduler', {}).get('frequency', '1m')
-    # Convert the scheduler_interval from the config into seconds
-    if scheduler_interval.endswith('s'):
-        scheduler_interval_seconds = int(scheduler_interval[:-1])
-    elif scheduler_interval.endswith('m'):
-        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60
-    elif scheduler_interval.endswith('h'):
-        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60 * 60
-    elif scheduler_interval.endswith('d'):
-        scheduler_interval_seconds = int(scheduler_interval[:-1]) * 60 * 60 * 24
-    else:
-        scheduler_interval_seconds = int(scheduler_interval)
-    if scheduler_interval_seconds is None or scheduler_interval_seconds < 1:
-        scheduler_interval_seconds = 60
+    scheduler_interval_seconds = interval_to_seconds(scheduler_interval, 60)
         
     logging.info('Scheduler interval is %s seconds ("%s" per the configuration). ⏱️', scheduler_interval_seconds, scheduler_interval)
 
@@ -497,6 +514,147 @@ def script_scheduled_run_background_job(config, lumberjack_client):
             else:
                 logging.info('Scheduler is paused.')
 
+def persist_file_positions(file_info):
+    with file_positions_file_lock:
+        try:
+            logging.debug('Storing file positions into local file: "%s"...', file_positions_file_path)
+            with open(file_positions_file_path, "w") as file:
+                json.dump(file_info, file)
+        except Exception as e:
+            logging.error('Error storing file positions: %s', str(e))
+
+def read_file_positions():
+    if os.path.exists(file_positions_file_path):
+        with file_positions_file_lock:
+            try:
+                logging.debug('Reading file positions from local file: "%s"...', file_positions_file_path)
+                with open(file_positions_file_path, "r") as file:
+                    return json.load(file)
+            except Exception as e:
+                logging.error('Error reading file positions: %s', str(e))
+                return {}
+    else:
+        logging.info('No file positions found ("%s"). Starting afresh with a blank list.', file_positions_file_path)
+        return {}
+
+def monitor_files_background_job():
+    # Get the globs from the configuration
+    filenameGlobs = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('paths', [])
+    data_stream__monitor_sources = config.get('scriptablebeat', {}).get('data_stream', {}).get('moniror_sources', [])
+    filemonitoring__report_as_log_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('report_as_log_in_stream', True)
+    filemonitoring__report_as_error_in_stream = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('report_as_error_in_stream', False)
+    filemonitoring__log_in_beats_log = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('log_in_beats_log', False)
+    filemonitoring__after_reading = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('after_reading', 'leave_as_is')
+    filemonitoring__folder_left_empty = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('folder_left_empty', 'leave_as_is')
+    filemonitoring__persist_positions_every = config.get('scriptablebeat', {}).get('data_stream', {}).get('files', {}).get('persist_positions_every', '2s')
+    filemonitoring__persist_positions_every_seconds = interval_to_seconds(filemonitoring__persist_positions_every, 5)
+
+    if 'files' not in data_stream__monitor_sources:
+        logging.info('Not set to monitor file ("files" not set in scriptablebeat.data_stream.monitor_sources).')
+        return None
+
+    if filenameGlobs is None or len(filenameGlobs) == 0:
+        logging.info('No files to monitor. (No path provided in scriptablebeat.data_stream.files.paths)')
+        return None
+
+    # Dictionary to store file positions and sizes
+    file_info = read_file_positions()
+
+    # To debounce the file positions saving
+    last_time_file_positions_saved = time.time()
+
+    while are_we_running:
+        try:
+            # Process the list of globs
+            matching_files = []
+            for pattern in filenameGlobs:
+                matching_files.extend(glob.glob(pattern))
+
+            for file_path in matching_files:
+                # logging.debug(f"Checking file '{file_path}'...") # TODO: Remove this line
+                try:
+                    # Check if the file is already in the dictionary
+                    if file_path not in file_info:
+                        file_info[file_path] = {'position': 0, 'size': 0}
+
+                    # Get the current file size
+                    current_size = os.path.getsize(file_path)
+
+                    # Check if the file size hasn't grown since the last read
+                    if current_size == file_info[file_path]['size']:
+                        if filemonitoring__after_reading == 'delete':
+                            logging.debug(f"File '{file_path}' has not grown since last cycle. Deleting... 🗑️") # TODO: Remove this line
+                            os.remove(file_path)
+                            # Remove the file from the file_info dictionary
+                            file_info.pop(file_path, None)
+
+                            # Check if the directory is empty after deleting the file
+                            if filemonitoring__folder_left_empty == 'delete':
+                                dir_path = os.path.dirname(file_path)
+                                if not os.listdir(dir_path):
+                                    logging.debug(f"Directory '{dir_path}' is now empty. Deleting...") # TODO: Remove this line
+                                    os.rmdir(dir_path)
+                        elif filemonitoring__after_reading == 'flush_to_empty' and current_size > 0:
+                            logging.debug(f"File '{file_path}' has not grown since last cycle. Flushing to empty...")
+                            with open(file_path, 'w') as file:
+                                file.truncate(0)
+                            # Reset the file position
+                            file_info[file_path] = {'position': 0, 'size': 0}
+
+                    else:
+                        # Check if the file has shrunk or grown
+                        if current_size < file_info[file_path]['size']:
+                            logging.debug(f"File '{file_path}' has shrunk. Reading from the beginning...")
+                            file_info[file_path] = {'position': 0, 'size': 0}
+                        else:
+                            logging.debug(f"File '{file_path}' has grown. Reading from previous position...")
+
+                        # Tail the file
+                        with open(file_path, 'r') as file:
+                            # Move to the last remembered position
+                            file.seek(file_info[file_path]['position'])
+
+                            line = True
+                            while are_we_running and line:
+                                line = file.readline()
+
+                                if line:
+                                    # Send the line to the Lumberjack Server
+                                    if filemonitoring__report_as_log_in_stream or filemonitoring__report_as_error_in_stream:
+                                        send_message_to_stream(lumberjack_client, line if filemonitoring__report_as_log_in_stream else None, line if filemonitoring__report_as_error_in_stream else None)
+
+                                    # And/or to the Beats' log
+                                    if filemonitoring__log_in_beats_log:
+                                        logging.info("External script FILE: %s", line)
+
+                                    # Update the current position in the file
+                                    file_info[file_path]['position'] = file.tell()
+                                    logging.debug(f"File '{file_path}' - New position: {file_info[file_path]['position']}") # TODO: Remove this line
+                                else:
+                                    time.sleep(0.1)
+                                    logging.debug(f"File '{file_path}' - No more line in file.") # TODO: Remove this line
+
+                        # Update the file size in the dictionary
+                        file_info[file_path]['size'] = current_size
+
+                except FileNotFoundError:
+                    # Handle file deletion
+                    file_info.pop(file_path, None)
+
+                # Check if it's time to save the file_info to disk
+                if time.time() - last_time_file_positions_saved >= filemonitoring__persist_positions_every_seconds:
+                    persist_file_positions(file_info)
+                    last_time_file_positions_saved = time.time()
+
+        except Exception as e:
+            logging.error(f"An error occurred: {str(e)}")
+            time.sleep(1)
+
+        # Hold a bit before checking again
+        time.sleep(0.5)
+
+    # Persist the file positions
+    persist_file_positions(file_info)
 
 if __name__ == "__main__":
     logging.info('--------------')
@@ -557,6 +715,12 @@ if __name__ == "__main__":
         # Get modules from config, then download and install them
         download_modules(config)
 
+        # Create a separate thread for monitoring files in the background
+        file_monitor_thread = threading.Thread(target=monitor_files_background_job)
+
+        # Start the thread
+        file_monitor_thread.start()
+
         # Run the first run script only once, at the very first startup
         first_run_exit_code = run_script_first_run(config, lumberjack_client)
 
@@ -594,6 +758,14 @@ if __name__ == "__main__":
                 scheduler_thread.join()
     except NameError:
         logging.debug('No scheduler thread to wait for.')
+
+    try:
+        if file_monitor_thread is not None:
+            if file_monitor_thread.is_alive():
+                logging.info('Waiting for file monitor thread to finish...')
+                file_monitor_thread.join()
+    except NameError:
+        logging.debug('No file monitor thread to wait for.')
 
     try:
         if heartbeat_thread is not None:

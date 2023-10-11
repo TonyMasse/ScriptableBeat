@@ -17,6 +17,9 @@ A Beat that allows the user to run any arbitrary script inside of it, to do the 
 - Ideally - Manage/clean the script output from the disk, preventing any unnecessary disk usage
 - Ideally - Deal with (Lumberjack) back-pressure by reducing/stopping scheduling frequency
 
+## To Deploy
+Visit the [Releases page](https://github.com/TonyMasse/ScriptableBeat/releases).
+
 ## High level architecture
 
 ### Container containing
